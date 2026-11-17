@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>INTELLIPARK</title>
+<style>
+:root{--bg:#0f172a;--card:#1e293b;--tx:#e2e8f0;--mut:#94a3b8;--ok:#22c55e;--bad:#ef4444;--gr:#64748b;--acc:#38bdf8;--warn:#f59e0b;--line:#334155;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:light){:root{--bg:#f1f5f9;--card:#fff;--tx:#0f172a;--mut:#475569;--gr:#94a3b8;--line:#cbd5e1}}
+*{box-sizing:border-box}html,body{margin:0}
+body{background:var(--bg);color:var(--tx);font:15px/1.4 system-ui,sans-serif;padding:12px;max-width:640px;margin:auto}
+h1{font-size:20px;margin:0;letter-spacing:1px}h2{font-size:14px;margin:0 0 8px;color:var(--mut);text-transform:uppercase;letter-spacing:.5px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px;margin-bottom:12px}
+.row{display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.grid{display:grid;gap:8px}.g2{grid-template-columns:1fr 1fr}.g4{grid-template-columns:repeat(4,1fr)}
+.chip{padding:3px 10px;border-radius:99px;font-size:12px;font-weight:700;color:#fff;background:var(--gr)}
+.ok{background:var(--ok)}.bad{background:var(--bad)}.warn{background:var(--warn);color:#111}.acc{background:var(--acc);color:#0f172a}
+button{font:inherit;font-weight:600;border:0;border-radius:10px;padding:10px;background:var(--acc);color:#0f172a}
+button.sec{background:transparent;border:1px solid var(--line);color:var(--tx)}
+button:disabled{opacity:.35}
+.num{text-align:center}.num b{display:block;font-size:24px}.num span{font-size:11px;color:var(--mut)}
+.sp{border:2px solid var(--gr);border-radius:12px;padding:10px;display:grid;gap:6px}
+.sp.L{border-color:var(--ok)}.sp.O{border-color:var(--bad)}.sp.R{border-color:var(--bad);border-style:dashed}
+.sp small{color:var(--mut);font-size:12px}
+.banner{background:var(--warn);color:#111;border-radius:10px;padding:8px;font-weight:700;text-align:center;margin-bottom:12px}
+.kv{display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--line);font-size:14px}.kv:last-child{border:0}
+.lcd{font-family:monospace;background:#14532d;color:#bbf7d0;padding:8px;border-radius:8px;white-space:pre}
+.led{display:inline-block;width:12px;height:12px;border-radius:50%;background:var(--gr);margin-right:4px}
+.bars{display:flex;align-items:flex-end;gap:2px;height:90px}.bars div{flex:1;background:var(--acc);border-radius:2px 2px 0 0;min-height:2px}
+.lbl{display:flex;justify-content:space-between;font-size:10px;color:var(--mut)}
+#log{max-height:160px;overflow:auto;font-size:12px;color:var(--mut)}
+#modal{position:fixed;inset:0;background:#000a;display:none;align-items:flex-end;z-index:5}
+#modal .card{width:100%;max-height:70%;overflow:auto;margin:0;border-radius:16px 16px 0 0}
+#toast{position:fixed;left:12px;right:12px;bottom:16px;background:#111;color:#fff;padding:10px;border-radius:10px;display:none;z-index:9;text-align:center}
+</style></head><body>
+
+<div class="row" style="margin-bottom:10px"><h1>INTELLIPARK</h1><span id="btchip" class="chip">DESCONECTADO</span></div>
+<div id="banner" class="banner" style="display:none">MODO DEMOSTRACIÓN: datos simulados, no reales</div>
+
+<div class="card">
+  <div class="row"><div class="grid g2" style="flex:1"><button id="mReal" onclick="setMode('real')">Modo real</button><button id="mDemo" class="sec" onclick="setMode('demo')">Demostración</button></div></div>
+  <div class="row" style="margin-top:8px"><span id="sys" class="chip">SIN DATOS</span><button id="btnConn" class="sec" onclick="openDevices()">Buscar HC-06</button></div>
+</div>
+
+<div class="card"><h2>Panel principal</h2>
+  <div class="grid g4"><div class="num"><b>4</b><span>Total</span></div><div class="num"><b id="nDisp">-</b><span>Libres</span></div><div class="num"><b id="nOcup">-</b><span>Ocupados</span></div><div class="num"><b id="nRes">-</b><span>Reservados</span></div></div>
+</div>
+
+<div class="card"><h2>Estacionamientos</h2><div class="grid g2" id="spaces"></div></div>
+
+<div class="card"><h2>Control del sistema</h2><div id="sysinfo"></div>
+  <div class="grid g2" style="margin-top:8px"><button onclick="send('ABRIR_BARRERA')" id="bOpen">Abrir barrera</button><button class="sec" onclick="send('CERRAR_BARRERA')" id="bClose">Cerrar barrera</button></div>
+  <div id="demoTools" class="grid g2" style="margin-top:8px;display:none"><button class="sec" onclick="demoEnt()">Simular vehículo en entrada</button><button class="sec" onclick="send('CONSULTAR_ESTADO')">Consultar estado</button></div>
+</div>
+
+<div class="card"><h2>Estadísticas <span id="statTag" class="chip"></span></h2>
+  <div class="grid g4"><div class="num"><b id="sOcc">-</b><span>Ocupación</span></div><div class="num"><b id="sAv">-</b><span>Disponib.</span></div><div class="num"><b id="sRes">0</b><span>Reservas</span></div><div class="num"><b id="sPeak">-</b><span>Hora pico</span></div></div>
+  <p style="margin:10px 0 4px;font-size:12px;color:var(--mut)">Ocupación promedio por hora (0 a 23 h)</p>
+  <div class="bars" id="bars"></div><div class="lbl"><span>0</span><span>6</span><span>12</span><span>18</span><span>23</span></div>
+  <p style="margin:10px 0 4px;font-size:12px;color:var(--mut)">Historial de cambios</p><div id="log"></div>
+  <button class="sec" style="margin-top:8px;width:100%" onclick="resetStats()">Borrar estadísticas de este modo</button>
+</div>
+
+<div id="modal"><div class="card"><div class="row"><h2>Dispositivos Bluetooth</h2><button class="sec" onclick="closeDev()">Cerrar</button></div>
+  <button style="width:100%;margin-bottom:8px" onclick="scan()">Buscar dispositivos cercanos</button><div id="devs"></div></div></div>
+<div id="toast"></div>
+
+<script>
+// ===== Puente nativo (lo provee la APK). En navegador normal no existe. =====
+const BT = (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.BtSerial) || null;
+let mode='real', conn='off', S=null, lastLine=0, prev=null, devsFound={}, stats=null, demoTimer=null, buf='';
+const $=id=>document.getElementById(id);
+const NAMES={L:'LIBRE',O:'OCUPADO',R:'RESERVADO'};
+
+function toast(t){const e=$('toast');e.textContent=t;e.style.display='block';clearTimeout(e._t);e._t=setTimeout(()=>e.style.display='none',2800)}
+function chip(el,txt,cls){el.textContent=txt;el.className='chip '+(cls||'')}
+
+// ===== Estadísticas (separadas por modo) =====
+function loadStats(){try{stats=JSON.parse(localStorage.getItem('ip_'+mode))}catch(e){stats=null}
+  if(!stats)stats={h:Array.from({length:24},()=>({n:0,s:0})),res:0,log:[]}}
+function saveStats(){try{localStorage.setItem('ip_'+mode,JSON.stringify(stats))}catch(e){}}
+function logEv(t){const d=new Date();stats.log.unshift(d.toLocaleTimeString()+'  '+t);stats.log.length=Math.min(stats.log.length,80)}
+function resetStats(){stats=null;try{localStorage.removeItem('ip_'+mode)}catch(e){}loadStats();render()}
+
+// ===== Protocolo =====
+function parse(l){const o={};l.split(';').slice(1).forEach(x=>{const i=x.indexOf('=');if(i>0)o[x.slice(0,i)]=x.slice(i+1)});return o}
+function handleLine(l){
+  l=l.trim();if(!l)return;lastLine=Date.now();
+  if(l.startsWith('ESTADO;'))applyState(parse(l));
+  else if(l.startsWith('OK;'))toast('Confirmado por Arduino: '+l.slice(3));
+  else if(l.startsWith('ERR;')){const p=l.split(';');toast('Rechazado: '+(p[2]||p[1]))}
+}
+function applyState(o){
+  const n={p1:o.P1,p2:o.P2,p3:o.P3,p4:o.P4,disp:+o.DISP,ocup:+o.OCUP,res:+o.RES,bar:o.BAR,ent:+o.ENT,d1:+o.D1,d2:+o.D2,buz:+o.BUZ};
+  if(prev){['p1','p2','p3','p4'].forEach((k,i)=>{if(prev[k]!==n[k]){logEv('Espacio '+(i+1)+': '+NAMES[n[k]]);if(n[k]==='R')stats.res++}});
+    if(prev.bar!==n.bar)logEv('Barrera '+(n.bar==='A'?'abierta':'cerrada'))}
+  else logEv('Primer estado recibido');
+  const h=new Date().getHours();stats.h[h].n++;stats.h[h].s+=(4-n.disp)/4;saveStats();
+  prev=S=n;render();
+}
+
+// ===== Envío =====
+function send(c){
+  if(mode==='demo'){demoCmd(c);return}
+  if(conn!=='on'){toast('Conéctate al HC-06 primero');return}
+  BT.write({data:c+'\n'}).then(()=>toast('Enviado: '+c)).catch(e=>toast('Error al enviar: '+(e.message||e)));
+}
+
+// ===== Bluetooth real =====
+function openDevs(){}
+function openDevices(){
+  if(mode!=='real'){toast('Cambia a Modo real');return}
+  if(conn==='on'){BT.disconnect();return}
+  if(!BT){toast('Bluetooth real solo funciona en la app APK de INTELLIPARK');return}
+  $('modal').style.display='flex';devsFound={};drawDevs();
+  BT.paired().then(r=>{(r.devices||[]).forEach(d=>devsFound[d.address]={name:d.name,paired:1});drawDevs()}).catch(e=>toast('Error: '+(e.message||e)));
+}
+function closeDev(){$('modal').style.display='none';if(BT)BT.stopScan().catch(()=>{})}
+function scan(){if(!BT)return;BT.scan().then(()=>toast('Buscando...')).catch(e=>toast('Error: '+(e.message||e)))}
+function drawDevs(){const e=$('devs');e.innerHTML='';const k=Object.keys(devsFound);
+  if(!k.length){e.textContent='Sin dispositivos. Empareja el HC-06 en Ajustes o usa Buscar.';return}
+  k.forEach(a=>{const d=devsFound[a],b=document.createElement('button');b.className='sec';b.style.cssText='width:100%;margin-bottom:6px;text-align:left';
+    b.textContent=(d.name||'(sin nombre)')+'  '+a+(d.paired?'  [emparejado]':'');b.onclick=()=>connectTo(a,d.name);e.appendChild(b)})}
+function connectTo(a,name){
+  closeDev();conn='ing';render();
+  BT.connect({address:a}).then(()=>{conn='on';lastLine=Date.now();buf='';toast('Conectado a '+(name||a));send('CONSULTAR_ESTADO');render()})
+  .catch(e=>{conn='off';toast('No se pudo conectar: '+(e.message||e));render()});
+}
+if(BT){
+  BT.addListener('found',d=>{devsFound[d.address]=Object.assign(devsFound[d.address]||{},{name:d.name});drawDevs()});
+  BT.addListener('data',e=>{buf+=e.data||'';let i;while((i=buf.indexOf('\n'))>=0){handleLine(buf.slice(0,i));buf=buf.slice(i+1)}});
+  BT.addListener('disconnected',()=>{conn='off';S=null;toast('Conexión Bluetooth perdida');render()});
+}
+setInterval(()=>{ // sondeo y vigilancia de la conexión
+  if(mode==='real'&&conn==='on'){
+    if(Date.now()-lastLine>3000)BT.write({data:'CONSULTAR_ESTADO\n'}).catch(()=>{});
+    if(Date.now()-lastLine>7000&&S){S=null;toast('El Arduino dejó de responder');render()}
+  }},1500);
+
+// ===== Modo demostración (simula el protocolo del Arduino) =====
+const D={p1:'L',p2:'L',p3:'L',p4:'L',bar:'C',ent:0,tc:null};
+function demoEmit(){const oc=(D.p1==='O')+(D.p2==='O'),rs=(D.p3==='R')+(D.p4==='R');
+  applyState({P1:D.p1,P2:D.p2,P3:D.p3,P4:D.p4,DISP:4-oc-rs,OCUP:oc,RES:rs,BAR:D.bar,ENT:D.ent,D1:D.p1==='O'?8:120,D2:D.p2==='O'?8:120,BUZ:0})}
+function dDisp(){return 4-(D.p1==='O')-(D.p2==='O')-(D.p3==='R')-(D.p4==='R')}
+function demoOpen(){D.bar='A';clearTimeout(D.tc);D.tc=setTimeout(()=>{D.bar='C';demoEmit()},8000)}
+function demoCmd(c){let r='OK;'+c;const n=c.slice(-1);
+  if(c==='CONSULTAR_ESTADO'){demoEmit();return}
+  if(c.startsWith('RESERVAR_')){if(D['p'+n]==='R')r='ERR;'+c+';YA_RESERVADO';else D['p'+n]='R'}
+  else if(c.startsWith('CANCELAR_')){if(D['p'+n]!=='R')r='ERR;'+c+';SIN_RESERVA';else D['p'+n]='L'}
+  else if(c==='ABRIR_BARRERA'){if(D.bar==='A')r='ERR;'+c+';YA_ABIERTA';else if(dDisp()<=0)r='ERR;'+c+';SIN_ESPACIO';else demoOpen()}
+  else if(c==='CERRAR_BARRERA'){if(D.bar==='C')r='ERR;'+c+';YA_CERRADA';else if(D.ent)r='ERR;'+c+';VEHICULO_EN_ENTRADA';else{D.bar='C';clearTimeout(D.tc)}}
+  handleLine(r);demoEmit();
+}
+function demoToggle(n){D['p'+n]=D['p'+n]==='O'?'L':'O';demoEmit()}
+function demoEnt(){D.ent=1;if(D.bar==='C'&&dDisp()>0)demoOpen();else if(dDisp()<=0)toast('ESTACIONAMIENTO COMPLETO');demoEmit();setTimeout(()=>{D.ent=0;demoEmit()},1500)}
+
+// ===== Modos =====
+function setMode(m){
+  mode=m;S=null;prev=null;loadStats();
+  clearInterval(demoTimer);
+  if(m==='demo'){demoTimer=setInterval(demoEmit,2000);demoEmit()}
+  render();
+}
+
+// ===== Dibujo =====
+function render(){
+  const real=mode==='real',live=real?conn==='on'&&S:!!S;
+  $('mReal').className=real?'':'sec';$('mDemo').className=real?'sec':'';
+  $('banner').style.display=real?'none':'block';$('demoTools').style.display=real?'none':'grid';
+  const bc=$('btchip'),bt=$('btnConn');
+  if(!real){chip(bc,'DEMOSTRACIÓN','warn');bt.style.display='none'}
+  else{bt.style.display='';chip(bc,conn==='on'?'CONECTADO':conn==='ing'?'CONECTANDO...':'DESCONECTADO',conn==='on'?'ok':conn==='ing'?'warn':'');
+    bt.textContent=conn==='on'?'Desconectar':'Buscar HC-06'}
+  const sy=$('sys');
+  if(!live)chip(sy,real?(conn==='on'?'SIN RESPUESTA':'SIN DATOS CONFIRMADOS'):'SIN DATOS','');
+  else chip(sy,S.disp>0?'ABIERTO: '+S.disp+' LIBRES':'COMPLETO',S.disp>0?'ok':'bad');
+  $('nDisp').textContent=live?S.disp:'-';$('nOcup').textContent=live?S.ocup:'-';$('nRes').textContent=live?S.res:'-';
+
+  const sp=$('spaces');sp.innerHTML='';
+  for(let i=1;i<=4;i++){
+    const st=live?S['p'+i]:null,cls=st||'',fis=i<=2;
+    const col=st==='L'?'ok':st?'bad':'';
+    let info=fis?'Sensor HC-SR04 '+(i===1?'D5/D6':'D7/D4')+(live?' · '+(S['d'+i]>=999?'sin eco':S['d'+i]+' cm'):'')+' · LED verde '+(i===1?'A0':'A1')
+              :'Reserva desde la app · LED rojo '+(i===3?'A2':'A3');
+    let btns='';
+    if(fis)btns=real?'':'<button class="sec" onclick="demoToggle('+i+')">Simular vehículo</button>';
+    else btns='<div class="grid g2"><button '+(live&&st==='L'?'':'disabled')+' onclick="send(\'RESERVAR_'+i+'\')">Reservar</button><button class="sec" '+(live&&st==='R'?'':'disabled')+' onclick="send(\'CANCELAR_'+i+'\')">Cancelar</button></div>';
+    sp.insertAdjacentHTML('beforeend','<div class="sp '+cls+'"><div class="row"><b>Espacio '+i+'</b><span class="chip '+col+'">'+(st?NAMES[st]:'SIN DATOS')+'</span></div><small>'+info+'</small>'+btns+'</div>');
+  }
+
+  const kv=(k,v)=>'<div class="kv"><span>'+k+'</span><span>'+v+'</span></div>';
+  let h='';
+  if(live){
+    const lcd=S.bar==='A'?'BIENVENIDO!\nBarrera abierta':'INTELLIPARK\nLib:'+S.disp+' Ocu:'+S.ocup+' R:'+S.res;
+    const led=(on,c)=>'<span class="led" style="background:'+(on?c:'')+'"></span>';
+    h=kv('Comunicación Arduino',real?'Activa':'Simulada')+kv('Sensor entrada (D2/D3)',S.ent?'Vehículo detectado':'Libre')
+     +kv('Sensor espacio 1',S.p1==='O'?'Detecta vehículo':'Libre')+kv('Sensor espacio 2',S.p2==='O'?'Detecta vehículo':'Libre')
+     +kv('Servomotor (D9)',S.bar==='A'?'Abierta (90°)':'Cerrada (0°)')+kv('Buzzer (D8)',S.buz?'Sonando':'En silencio')
+     +kv('Matriz LED 8x8','Muestra: '+S.disp)+kv('LEDs A0 A1 A2 A3',led(S.p1==='L','#22c55e')+led(S.p2==='L','#22c55e')+led(S.p3==='R','#ef4444')+led(S.p4==='R','#ef4444'))
+     +'<div class="lcd" style="margin-top:8px">'+lcd+'</div><small style="color:var(--mut)">LCD y matriz: reconstruidos a partir del estado reportado.</small>';
+  }else h=kv('Comunicación Arduino',real?(conn==='on'?'Sin respuesta':'Desconectada'):'-')+'<p style="color:var(--mut)">Sin datos confirmados. Los componentes se muestran cuando el Arduino responde.</p>';
+  $('sysinfo').innerHTML=h;
+  $('bOpen').disabled=$('bClose').disabled=!live;
+
+  // estadísticas
+  chip($('statTag'),real?'DATOS REALES':'DEMO',real?'ok':'warn');
+  let tn=0,ts=0,pk=-1,pv=-1;const avg=stats.h.map((x,i)=>{const a=x.n?x.s/x.n:0;tn+=x.n;ts+=x.s;if(a>pv&&x.n){pv=a;pk=i}return a});
+  const occ=tn?Math.round(ts/tn*100):null;
+  $('sOcc').textContent=occ===null?'-':occ+'%';$('sAv').textContent=occ===null?'-':(100-occ)+'%';
+  $('sRes').textContent=stats.res;$('sPeak').textContent=pk<0?'-':pk+'h';
+  $('bars').innerHTML=avg.map(a=>'<div style="height:'+Math.max(2,a*100)+'%"></div>').join('');
+  $('log').innerHTML=stats.log.length?stats.log.map(x=>'<div>'+x+'</div>').join(''):'Sin registros todavía.';
+}
+loadStats();render();
+</script></body></html>
